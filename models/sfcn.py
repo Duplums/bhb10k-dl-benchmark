@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 
 class SFCN(nn.Module):
+    """Model introduced in "Accurate brain age prediction with lightweight deep neural networks", MIA 2021"
+    """
     def __init__(self, in_channels=1,
                  channel_number=[32, 64, 128, 256, 256, 64], output_dim=40, dropout=True):
         super(SFCN, self).__init__()

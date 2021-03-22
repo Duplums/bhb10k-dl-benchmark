@@ -1,22 +1,7 @@
 from torchvision.models.utils import load_state_dict_from_url
-from pynet.models.layers.grid_attention_layer import GridAttentionBlock3D
-from pynet.models.layers.dropout import SpatialConcreteDropout
+from models.layers.dropout import SpatialConcreteDropout
 import torch
 import torch.nn as nn
-
-model_urls = {
-    'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
-    'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',
-    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
-    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
-    'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
-    'resnext50_32x4d': 'https://download.pytorch.org/models/resnext50_32x4d-7cdf4587.pth',
-    'resnext101_32x8d': 'https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth',
-    'wide_resnet50_2': 'https://download.pytorch.org/models/wide_resnet50_2-95faca4d.pth',
-    'wide_resnet101_2': 'https://download.pytorch.org/models/wide_resnet101_2-32ee1156.pth',
-}
-
-
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
@@ -125,8 +110,7 @@ class ResNet(nn.Module):
 
     def __init__(self, block, layers, in_channels=3, num_classes=1000, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None, dropout_rate=None, concrete_dropout=False, with_grid_attention=False,
-                 return_hidden_layers=False, prediction_bias=True, initial_kernel_size=7):
+                 norm_layer=None, concrete_dropout=False, prediction_bias=True):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm3d
@@ -136,8 +120,6 @@ class ResNet(nn.Module):
         self.inputs = None
         self.inplanes = 64
         self.dilation = 1
-        self.with_grid_attention = with_grid_attention
-        self.return_hidden_layers = return_hidden_layers
 
         if replace_stride_with_dilation is None:
             # each element in the tuple indicates if we should replace
@@ -148,9 +130,9 @@ class ResNet(nn.Module):
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
         self.groups = groups
         self.base_width = width_per_group
-        initial_stride = 2 if initial_kernel_size==7 else 1
-        padding = (initial_kernel_size-initial_stride+1)//2
-        self.conv1 = nn.Conv3d(in_channels, self.inplanes, kernel_size=initial_kernel_size, stride=initial_stride,
+        initial_stride = 2
+        padding = (7-initial_stride+1)//2
+        self.conv1 = nn.Conv3d(in_channels, self.inplanes, kernel_size=7, stride=initial_stride,
                                padding=padding, bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
@@ -170,19 +152,7 @@ class ResNet(nn.Module):
                                        dilate=replace_stride_with_dilation[2],
                                        concrete_dropout=concrete_dropout)
         self.avgpool = nn.AdaptiveAvgPool3d(1)
-        if dropout_rate is not None and dropout_rate>0:
-            self.dropout = nn.Dropout(dropout_rate)
-
-        # attention mechanism
-        self.attention_map = None
-        if self.with_grid_attention:
-            attention_block = GridAttentionBlock3D
-            self.compatibility_score = attention_block(in_channels=128, gating_channels=512,
-                                                       inter_channels=512, sub_sample_factor=(1, 1, 1))
-
-            self.fc_ga = nn.Linear(128, num_classes)
-        else:
-            self.fc = nn.Linear(channels[-1] * block.expansion, num_classes, bias=prediction_bias)
+        self.fc = nn.Linear(channels[-1] * block.expansion, num_classes, bias=prediction_bias)
 
         for m in self.modules():
             if isinstance(m, nn.Conv3d):
@@ -247,30 +217,12 @@ class ResNet(nn.Module):
 
         x5 = self.avgpool(x4)
         x6 = torch.flatten(x5, 1)
-        if hasattr(self, 'dropout'):
-            x6  = self.dropout(x6)
-        if self.with_grid_attention:
-            conv_scored, self.attention_map = self.compatibility_score(x2, x5)
-            pool_attention = self.avgpool(conv_scored)
-            pool_attention = torch.flatten(pool_attention, 1)
-            x6 = self.fc_ga(pool_attention).squeeze(dim=1)
-        else:
-            x6 = self.fc(x6).squeeze(dim=1)
-        if self.return_hidden_layers:
-            return x6, [x, x1, x2, x3, x4, x5]
+
+        x6 = self.fc(x6).squeeze(dim=1)
         return x6
 
 
-def _resnet(arch, block, layers, pretrained, progress, **kwargs):
-    model = ResNet(block, layers, **kwargs)
-    if pretrained:
-        state_dict = load_state_dict_from_url(model_urls[arch],
-                                              progress=progress)
-        model.load_state_dict(state_dict)
-    return model
-
-
-def resnet18(pretrained=False, progress=True, **kwargs):
+def resnet18(**kwargs):
     r"""ResNet-18 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
 
@@ -278,11 +230,10 @@ def resnet18(pretrained=False, progress=True, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet('resnet18', BasicBlock, [2, 2, 2, 2], pretrained, progress,
-                   **kwargs)
+    return ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
 
 
-def resnet34(pretrained=False, progress=True, **kwargs):
+def resnet34(**kwargs):
     r"""ResNet-34 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
 
@@ -290,11 +241,10 @@ def resnet34(pretrained=False, progress=True, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet('resnet34', BasicBlock, [3, 4, 6, 3], pretrained, progress,
-                   **kwargs)
+    return ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
 
 
-def resnet50(pretrained=False, progress=True, **kwargs):
+def resnet50(**kwargs):
     r"""ResNet-50 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
 
@@ -302,22 +252,11 @@ def resnet50(pretrained=False, progress=True, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, progress,
-                   **kwargs)
+    return ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
 
 
-def resnet101(pretrained=False, progress=True, **kwargs):
-    r"""ResNet-101 model from
-    `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
 
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-        progress (bool): If True, displays a progress bar of the download to stderr
-    """
-    return _resnet('resnet101', Bottleneck, [3, 4, 23, 3], pretrained, progress,
-                   **kwargs)
-
-def resnext50_32x4d(pretrained=False, progress=True, **kwargs):
+def resnext50_32x4d(**kwargs):
     r"""ResNeXt-50 32x4d model from
     `"Aggregated Residual Transformation for Deep Neural Networks" <https://arxiv.org/pdf/1611.05431.pdf>`_
 
@@ -327,5 +266,4 @@ def resnext50_32x4d(pretrained=False, progress=True, **kwargs):
     """
     kwargs['groups'] = 32
     kwargs['width_per_group'] = 4
-    return _resnet('resnext50_32x4d', Bottleneck, [3, 4, 6, 3],
-                   pretrained, progress, **kwargs)
+    return ResNet(Bottleneck, [3, 4, 6, 3],  **kwargs)

@@ -1,36 +1,21 @@
-# -*- coding: utf-8 -*-
-##########################################################################
-# NSAp - Copyright (C) CEA, 2020
-# Distributed under the terms of the CeCILL-B license, as published by
-# the CEA-CNRS-INRIA. Refer to the LICENSE file or to
-# http://www.cecill.info/licences/Licence_CeCILL-B_V1-en.html
-# for details.
-##########################################################################
-
 """
-Module that privides common spatial and intensity data augmentation tools.
+Module that provides common spatial and intensity data augmentation tools.
 """
 
-# Import
 from collections import namedtuple
 import copy
-import logging
 import numpy as np
 from .spatial import affine
 from .spatial import flip
-from .spatial import deformation
-from .spatial import cutout
+from .intensity import normalize
 from .intensity import add_blur
 from .intensity import add_noise
 from .intensity import add_ghosting
 from .intensity import add_spike
 from .intensity import add_biasfield
 from .intensity import add_motion
-from .intensity import add_offset
 from .intensity import add_swap
 
-# Global parameters
-logger = logging.getLogger("pynet")
 
 class Transformer(object):
     """ Class that can be used to register a sequence of transformations.
@@ -103,14 +88,12 @@ class Transformer(object):
                     "order" in kwargs):
                 kwargs["order"] = 0
             if np.random.rand() < trf.probability:
-                logger.debug("Applying {0}...".format(trf.transform))
                 if trf.with_channel:
                     transformed = trf.transform(transformed, **kwargs)
                 else:
                     for channel_id in range(transformed.shape[0]):
                         transformed[channel_id] = trf.transform(
                             transformed[channel_id], **kwargs)
-                logger.debug("Done.")
         if not self.with_channel:
             transformed = transformed[0]
         return transformed

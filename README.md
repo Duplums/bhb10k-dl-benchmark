@@ -3,7 +3,12 @@
 
 In this repository you can find all the CNN models implemented in Pytorch used as a baseline on the 
 BHB-10K dataset for **age and sex prediction**. You can also find the baselines for **schizophrenia** prediction
-on a clinical dataset. Finally, the baselines using simple linear (resp. logistic) regression for age
+on a clinical dataset. This repository contains also the data augmentation transformations for 3D MRI implemented as well
+as a convenient Pytorch Dataloader.
+
+All preprocessed data are available through the links below. 
+
+Finally, the baselines using simple linear (resp. logistic) regression for age
 (resp. sex and diagnosis) prediction are also provided.
 
 ## Data 

@@ -1,28 +1,12 @@
-# -*- coding: utf-8 -*-
-##########################################################################
-# NSAp - Copyright (C) CEA, 2020
-# Distributed under the terms of the CeCILL-B license, as published by
-# the CEA-CNRS-INRIA. Refer to the LICENSE file or to
-# http://www.cecill.info/licences/Licence_CeCILL-B_V1-en.html
-# for details.
-##########################################################################
-
-"""
-Common functions to change image intensities.
-Code: https://github.com/fepegar/torchio
-"""
-
-# Import
-import numbers
 import numpy as np
 from scipy.ndimage import gaussian_filter
 from scipy.spatial.transform import Rotation
 from scipy.ndimage import map_coordinates
-from .transform import compose
-from .transform import affine_flow
-from .utils import interval
+from .utils import *
 
 
+def normalize(arr, mean=0.0, std=1.0, eps=1e-8):
+    return std * (arr - np.mean(arr))/(np.std(arr) + eps) + mean
 
 def add_swap(arr, patch_size=15, num_iterations=10, data_threshold=None, inplace=False):
     """Randomly swap patches within an image.
@@ -67,34 +51,6 @@ def add_swap(arr, patch_size=15, num_iterations=10, data_threshold=None, inplace
         arr[patch2] = data_patch1
 
     return arr
-
-def add_offset(arr, factor):
-    """ Add a random intensity offset (shift and scale).
-
-    Parameters
-    ----------
-    arr: array
-        the input data.
-    factor: float or 2-uplet
-        the offset scale factor [0, 1] for the standard deviation and the mean.
-    seed: int, default None
-        seed to control random number generator.
-
-    Returns
-    -------
-    transformed: array
-        the transformed input data.
-    """
-    factor = interval(factor, lower=factor)
-    sigma = interval(factor[0], lower=0)
-    mean = interval(factor[1])
-    sigma_random = np.random.uniform(low=sigma[0], high=sigma[1], size=1)[0]
-    mean_random = np.random.uniform(low=mean[0], high=mean[1], size=1)[0]
-    offset = np.random.normal(mean_random, sigma_random, arr.shape)
-    offset += 1
-    transformed = arr * offset
-    return transformed
-
 
 def add_blur(arr, snr=None, sigma=None):
     """ Add random blur using a Gaussian filter.

@@ -1,16 +1,16 @@
 import torch.nn as nn
 import numpy as np
 import torch
-from pynet.models.layers.dropout import SpatialConcreteDropout
+from models.layers.dropout import SpatialConcreteDropout
 
-class ColeNet(nn.Module):
+class tiny_vgg(nn.Module):
 
-    def __init__(self, num_classes, input_size, dropout_rate=0, concrete_dropout=False):
+    def __init__(self, num_classes, input_size, concrete_dropout=False):
         super().__init__()
         # input_size == (C, H, W, D)
         self.down = []
         self.input_size = input_size
-        self.name = "ColeNet"
+        self.name = "TinyVGG"
 
         channels = [8, 16, 32, 64, 128]
         for i, c in enumerate(channels):
@@ -21,7 +21,7 @@ class ColeNet(nn.Module):
 
         self.down = nn.ModuleList(self.down)
         self.classifier = Classifier(channels[-1] * np.prod(np.array(self.input_size[1:])//2**len(channels)),
-                                     num_classes, dropout_rate=dropout_rate)
+                                     num_classes)
         # Kernel initializer
         # Weight initialization
         self.weight_initializer()
@@ -75,18 +75,14 @@ class ConvBlock(nn.Module):
 
 class Classifier(nn.Module):
 
-    def __init__(self, num_input_features, num_classes, dropout_rate=0):
+    def __init__(self, num_input_features, num_classes):
         super().__init__()
         self.input_features = num_input_features
         self.num_classes = num_classes
-        if dropout_rate > 0:
-            self.dropout = nn.Dropout(dropout_rate)
         self.fc = nn.Linear(num_input_features, num_classes)
 
 
     def forward(self, x):
-        if hasattr(self, 'dropout'):
-            x = self.dropout(x)
         x = self.fc(x)
         return x
 
