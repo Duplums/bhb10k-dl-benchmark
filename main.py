@@ -1,8 +1,7 @@
 import argparse
 from config import Config
-from training import BaseTrainer
-from testing import BaseTester
-import torch
+from engine import Engine
+from metrics import METRICS
 import logging
 
 if __name__=="__main__":
@@ -11,14 +10,20 @@ if __name__=="__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--preproc", type=str, default='cat12', choices=['cat12', 'quasi_raw'])
-    parser.add_argument("--input_path", type=str, nargs='+', required=True)
-    parser.add_argument("--metadata_path", type=str, nargs='+', required=True)
+    parser.add_argument("--train_data_path", type=str)
+    parser.add_argument("--train_label_path", type=str)
+    parser.add_argument("--val_data_path", type=str)
+    parser.add_argument("--val_label_path", type=str)
+    parser.add_argument("--test_data_path", type=str)
+    parser.add_argument("--test_label_path", type=str)
+    parser.add_argument("--model_path", type=str)
     parser.add_argument("--checkpoint_dir", type=str, required=True)
     parser.add_argument("--exp_name", type=str, required=True)
     parser.add_argument("--da", type=str, nargs='+', default=[], choices=['flip', 'blur', 'noise', 'resized_crop',
                                                                           'affine', 'ghosting', 'motion', 'spike',
                                                                           'biasfield', 'swap'])
+    parser.add_argument("--metrics", nargs='+', type=str, choices=list(METRICS.keys()),
+                        help="Metrics to be computed on validation/test set")
     parser.add_argument("--labels", nargs='+', type=str, help="Label(s) to be predicted")
     parser.add_argument("--loss", type=str, choices=['BCE', 'l1', 'l2', 'GaussianLogLkd'], required=True)
     parser.add_argument("--net", type=str, choices=["resnet18", "resnet34", "resnet50", "resnext50", "vgg11", "vgg16",
@@ -33,13 +38,7 @@ if __name__=="__main__":
         args.train = True
         logger.info("No mode specify: training mode is set automatically")
 
-    if args.train:
-        trainer = BaseTrainer(args, config)
-        trainer.run()
+    engine = Engine(args, config)
 
-    if args.test:
-        tester = BaseTester(args)
-        tester.run()
-
-
+    engine.run(training=args.train, testing=args.test)
 

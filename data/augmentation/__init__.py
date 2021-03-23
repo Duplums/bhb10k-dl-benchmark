@@ -7,6 +7,8 @@ import copy
 import numpy as np
 from .spatial import affine
 from .spatial import flip
+from .spatial import crop
+from .spatial import padding
 from .intensity import normalize
 from .intensity import add_blur
 from .intensity import add_noise

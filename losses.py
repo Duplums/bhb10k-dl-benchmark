@@ -1,11 +1,4 @@
-import logging
-import math
-import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as func
-from torch.autograd import Variable
-import numpy as np
 
 
 class ConcreteDropoutLoss:
@@ -38,6 +31,7 @@ class ConcreteDropoutLoss:
                 regularization_loss = regularization_loss + module.regularisation()
         self.model.apply(get_module_regularization_loss)
         return regularization_loss
+
 
 class GaussianLogLkd(object):
     def __call__(self, outputs, targets):

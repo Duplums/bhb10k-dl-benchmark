@@ -5,29 +5,36 @@ from data.augmentation import *
 
 class MRIDataset(Dataset):
 
-    def __init__(self, config, args, training=False, validation=False, **kwargs):
+    def __init__(self, config, args, training=False, validation=False, test=False, **kwargs):
         super().__init__(**kwargs)
-        assert training != validation
+        assert training + validation + test == 1
 
         self.transforms = Transformer()
         self.config = config
         self.args = args
+        # Crop+Pad images to have fixed dimension (1, 128, 128, 128)
+        self.transforms.register(crop, probability=1.0, size=(1, 121, 128, 121))
+        self.transforms.register(padding, probability=1.0, size=(1, 128, 128, 128))
         self.transforms.register(normalize, probability=1.0)
-        self.add_data_augmentations(self.transforms, args.da)
-
+        if (not validation) and (not test):
+            self.add_data_augmentations(self.transforms, args.da)
         if training:
-            self.data = np.load(config.data_train)
-            self.labels = pd.read_csv(config.label_train)
+            self.data = np.load(args.train_data_path)
+            self.labels = pd.read_csv(args.train_label_path)
         elif validation:
-            self.data = np.load(config.data_val)
-            self.labels = pd.read_csv(config.label_val)
+            self.data = np.load(args.val_data_path)
+            self.labels = pd.read_csv(args.val_label_path)
+        elif test:
+            self.data = np.load(args.test_data_path)
+            self.labels = pd.read_csv(args.test_label_path)
+
 
     def add_data_augmentations(self, transformer, augmentations):
         aug2tf = {
             'flip': (flip, dict()),
-            'blur': (add_blur, {'snr': 1000}),
-            'noise': (add_noise, {'snr': 1000}),
-            'resized_crop': (crop, {'size': (115, 138, 115), 'resize':True}),
+            'blur': (add_blur, {'sigma': [0.1, 1]}),
+            'noise': (add_noise, {'sigma': [0.1, 1]}),
+            'resized_crop': (crop, {'size': (1, 90, 90, 90), 'crop_type': 'random', 'resize':True}),
             'affine': (affine, {'rotation': 5, 'translation': 10, 'zoom': 0}),
             'ghosting': (add_ghosting, {'intensity': 1, 'axis': 0}),
             'motion': (add_motion, {'n_transforms': 3, 'rotation': 40, 'translation': 10}),
@@ -45,7 +52,6 @@ class MRIDataset(Dataset):
         return (list_x, list_y)
 
     def __getitem__(self, idx):
-        np.random.seed()
         x = self.transforms(self.data[idx])
         labels = self.labels[self.args.labels].values[idx]
 

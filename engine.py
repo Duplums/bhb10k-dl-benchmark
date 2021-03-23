@@ -11,38 +11,54 @@ from torch.utils.data import DataLoader, RandomSampler
 import pandas as pd
 
 
-class BaseTrainer():
+class Engine():
 
     def __init__(self, args, config):
         self.args = args
-        self.net = BaseTrainer.build_network(args.net, config)
-        self.loss = BaseTrainer.build_loss(args.loss, net=self.net, config=config)
+        self.net = Engine.build_network(args.net, config)
+        self.loss = Engine.build_loss(args.loss, net=self.net, config=config)
 
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=config.lr, weight_decay=config.weight_decay)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, gamma=config.gamma_scheduler,
                                                          step_size=config.step_size_scheduler)
 
-        dataset_train = MRIDataset(config, args, training=True)
-        dataset_val = MRIDataset(config, args, validation=True)
+        loader_train, loader_val, loader_test = (None, None, None)
+        if args.train_data_path is not None:
+            dataset_train = MRIDataset(config, args, training=True)
+            loader_train = DataLoader(dataset_train,
+                                      batch_size=config.batch_size,
+                                      sampler=RandomSampler(dataset_train),
+                                      collate_fn=dataset_train.collate_fn,
+                                      pin_memory=config.pin_mem,
+                                      num_workers=config.num_cpu_workers)
 
-        loader_train = DataLoader(dataset_train,
-                                  batch_size=config.batch_size,
-                                  sampler=RandomSampler(dataset_train),
-                                  collate_fn=dataset_train.collate_fn,
-                                  pin_memory=config.pin_mem,
-                                  num_workers=config.num_cpu_workers)
-        loader_val = DataLoader(dataset_val,
-                                batch_size=config.batch_size,
-                                collate_fn=dataset_train.collate_fn,
-                                pin_memory=config.pin_mem,
-                                num_workers=config.num_cpu_workers)
+        if args.val_data_path is not None:
+            dataset_val = MRIDataset(config, args, validation=True)
+            loader_val = DataLoader(dataset_val,
+                                    batch_size=config.batch_size,
+                                    collate_fn=dataset_val.collate_fn,
+                                    pin_memory=config.pin_mem,
+                                    num_workers=config.num_cpu_workers)
 
-        self.model = DLModel(self.net, self.loss, config, loader_train=loader_train, loader_val=loader_val,
+        if args.test_data_path is not None:
+            dataset_test = MRIDataset(config, args, test=True)
+            loader_test = DataLoader(dataset_test,
+                                    batch_size=config.batch_size,
+                                    collate_fn=dataset_test.collate_fn,
+                                    pin_memory=config.pin_mem,
+                                    num_workers=config.num_cpu_workers)
+
+        self.model = DLModel(self.net, self.loss, config, args,
+                             loader_train=loader_train,
+                             loader_val=loader_val,
+                             loader_test=loader_test,
                              scheduler=self.scheduler)
 
-    def run(self):
-        self.model.training()
-
+    def run(self, training=False, testing=False):
+        if training:
+            self.model.training()
+        if testing:
+            self.model.testing()
 
     @staticmethod
     def build_loss(name, net=None, config=None):

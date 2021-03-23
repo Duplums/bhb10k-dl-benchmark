@@ -15,5 +15,7 @@ class Config:
         # Scheduler
         self.gamma_scheduler = 0.9
         self.step_size_scheduler = 10
+        # Enable GPU
+        self.cuda=True
 
 
