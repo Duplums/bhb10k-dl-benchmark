@@ -12,6 +12,9 @@ Finally, the baselines using simple linear (resp. logistic) regression for age
 (resp. sex and diagnosis) prediction are also provided.
 
 ## Data 
+
+![Alt text](images/BHB-10K_illustration.png)
+
 ### Pre-processings
 
 **Quasi-Raw**. It consists essentially in brain extraction with [BET2](http://poc.vl-e.nl/distribution/manual/fsl-3.2/bet2) 
