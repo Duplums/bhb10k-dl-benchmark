@@ -93,9 +93,10 @@ class MultiVarGaussianLogLkd(object):
         cf. Multivariate Uncertainty in Deep Learning, Russell, IEEE TNLS 21
     """
 
-    def __init__(self, pb: str="regression", **kwargs):
+    def __init__(self, pb: str="regression", no_covar=False, **kwargs):
         """
         :param pb: "classif" or "regression"
+        :param no_covar: If True, assume that the covariance matrix is diagonal
         :param kwargs: kwargs given to PyTorch Cross Entropy Loss
         """
         if pb == "classif":
@@ -104,35 +105,52 @@ class MultiVarGaussianLogLkd(object):
             pass
         else:
             raise ValueError("Unknown pb: %s"%pb)
+        self.no_covar = no_covar
 
     def __call__(self, x, Sigma, target):
         """
         :param x: output segmentation, shape [*, C, *]
-        :param Sigma: co-variance coefficients, shape [*, C(C+1)/2, *] organized as row-first according to tril_indices
+        :param Sigma: co-variance coefficients. It can be:
+            (1) If no_covar==False, shape [*, C(C+1)/2, *] organized as row-first according to tril_indices
                from torch and numpy : [rho_11, rho_12, ..., rho_1C, rho_22, rho_23,...rho_2C,... rho_CC]
                with rho_ii = exp(.) > 0 encodes the variances and rho_ij = tanh(.) encodes the correlations.
                The covariance matrix is M is s.t  M[i][j] = rho_ij * srqrt(rho_ii) * sqrt(rho_ij)
+            (2) If no_covar==True, shape [*, C, *], assuming that all non-diagonal coeff are zeros. We assume it
+                has the form [sigma_1**2, sigma_2**2, ..., sigma_C**2]
         :param target: true segmentation, shape [*, C, *]
         :return: log-likelihood for logistic regression with uncertainty
         """
         C, ndims = x.shape[1], x.ndim
-        assert (C * (C+1))//2 == Sigma.shape[1] and Sigma.ndim == ndims, \
-            "Inconsistent shape for input data and covariance: {} vs {}".format(x.shape, Sigma.shape)
-        # permutes the 2nd dim to last, keeping other unchanged (in v1.9, eq. to torch.moveaxis(1, -1))
-        swap_channel_last = (0,) + tuple(range(2,ndims)) + (1,)
-        # First, re-arrange covar matrix to have shape [*, *, C, C]
-        covar_shape = (Sigma.shape[0],) + Sigma.shape[2:] + (C, C)
-        tril_ind = torch.tril_indices(row=C, col=C, offset=0)
-        triu_ind = torch.triu_indices(row=C, col=C, offset=0)
-        Sigma_ = torch.zeros(covar_shape, device=x.device)
-        Sigma_[..., tril_ind[0], tril_ind[1]] = Sigma.permute(swap_channel_last)
-        Sigma_[..., triu_ind[0], triu_ind[1]] = Sigma.permute(swap_channel_last)
-        # Then compute determinant and inverse of covariance matrices
-        logdet_sigma = torch.logdet(Sigma_) # shape [*, *]
-        inv_sigma = torch.inverse(Sigma_) # shape [*, *, C, C]
-        # Finally, compute log-likehood of multivariate gaussian distribution
-        err = (target - x).permute(swap_channel_last).unsqueeze(-1) # shape [*, *, C, 1]
-        return ((err.transpose(-1,-2) @ inv_sigma @ err).squeeze() + logdet_sigma.squeeze()).mean()
+
+        if self.no_covar:
+            # Simplified Case
+            assert C == Sigma.shape[1] and Sigma.ndim == ndims,\
+                "Inconsistent shape for input data and covariance: {} vs {}".format(x.shape, Sigma.shape)
+            assert torch.all(Sigma > 0), "Negative values found in Sigma"
+            inv_Sigma = 1./Sigma # shape [*, C, *]
+            logdet_sigma = torch.log(torch.prod(Sigma, dim=1)) # shape [*, *]
+            err = (target - x) # shape [*, C, *]
+            return ((err * inv_Sigma * err).sum(dim=1) + logdet_sigma.squeeze()).mean()
+        else:
+            # General Case
+            assert (C * (C+1))//2 == Sigma.shape[1] and Sigma.ndim == ndims, \
+                "Inconsistent shape for input data and covariance: {} vs {}".format(x.shape, Sigma.shape)
+            # permutes the 2nd dim to last, keeping other unchanged (in v1.9, eq. to torch.moveaxis(1, -1))
+            swap_channel_last = (0,) + tuple(range(2,ndims)) + (1,)
+            # First, re-arrange covar matrix to have shape [*, *, C, C]
+            covar_shape = (Sigma.shape[0],) + Sigma.shape[2:] + (C, C)
+            tril_ind = torch.tril_indices(row=C, col=C, offset=0)
+            triu_ind = torch.triu_indices(row=C, col=C, offset=0)
+            Sigma_ = torch.zeros(covar_shape, device=x.device)
+            Sigma_[..., tril_ind[0], tril_ind[1]] = Sigma.permute(swap_channel_last)
+            Sigma_[..., triu_ind[0], triu_ind[1]] = Sigma.permute(swap_channel_last)
+            # Then compute determinant and inverse of covariance matrices
+            logdet_sigma = torch.logdet(Sigma_) # shape [*, *]
+            inv_sigma = torch.inverse(Sigma_) # shape [*, *, C, C]
+            # Finally, compute log-likehood of multivariate gaussian distribution
+            err = (target - x).permute(swap_channel_last).unsqueeze(-1) # shape [*, *, C, 1]
+            return ((err.transpose(-1,-2) @ inv_sigma @ err).squeeze() + logdet_sigma.squeeze()).mean()
+
 
 
 
